@@ -29,8 +29,8 @@ html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif; }
 .stButton > button:hover { background-color: #2E75B6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(31,78,121,0.3); }
 .result-box { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; padding: 14px; color: #2e7d32; font-weight: 600; margin-top: 10px; }
 .error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 14px; color: #c62828; margin-top: 10px; }
-.login-box { max-width: 400px; margin: 80px auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 40px; text-align: center; }
-.login-title { font-size: 1.2rem; font-weight: 700; color: #1F4E79; margin-bottom: 20px; }
+.login-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 18px; margin-bottom: 10px; }
+.login-title { font-size: 1.2rem; font-weight: 700; color: #1F4E79; margin-bottom: 10px; }
 hr { margin: 8px 0 !important; border-color: #e2e8f0 !important; }
 </style>
 """, unsafe_allow_html=True)

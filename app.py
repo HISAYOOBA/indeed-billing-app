@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import datetime
+import pytz
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -102,7 +103,8 @@ SPREADSHEET_ID = "1ge34r5lmRi6st9hFOJvzMEvdh4MRC8csHQHvhXHs5oY"
 def write_log(client_name, months, diff_results):
     try:
         sheets = get_sheets_service()
-        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        jst = pytz.timezone("Asia/Tokyo")
+        now = datetime.now(jst).strftime("%Y/%m/%d %H:%M:%S")
         month_str = "・".join(months)
         diff_str = "　".join([
             f"{m}:{'差異なし' if d == 0 else f'差異¥{abs(int(d)):,}'}"

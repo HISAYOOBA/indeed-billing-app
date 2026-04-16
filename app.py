@@ -61,11 +61,18 @@ def parse_yen(val):
     try: return int(float(s))
     except: return 0
 
-def thin_border():
-    s = Side(style='thin', color='CCCCCC')
+# ==================== 罫線：全辺を統一した実線で定義 ====================
+FONT_NAME = 'メイリオ'  # ゴシック体
+
+def all_border(color='AAAAAA', style='thin'):
+    s = Side(style=style, color=color)
     return Border(left=s, right=s, top=s, bottom=s)
 
-def medium_border():
+def header_border():
+    s = Side(style='medium', color='1F4E79')
+    return Border(left=s, right=s, top=s, bottom=s)
+
+def total_border():
     s = Side(style='medium', color='1F4E79')
     return Border(left=s, right=s, top=s, bottom=s)
 
@@ -87,47 +94,63 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         left_on='Employer ID', right_on='アカウントID', how='left'
     )
     diff = hits_inv['費消額'].sum() - cost_df['合計費用_数値'].sum()
-    HEADER_BG, WHITE, GRAY, TOTAL_BG = '1F4E79', 'FFFFFF', 'F5F5F5', 'FFF2CC'
+
+    HEADER_BG = '1F4E79'
+    WHITE = 'FFFFFF'
+    GRAY = 'F0F4F8'
+    TOTAL_BG = 'FFF2CC'
+
     wb = Workbook()
     ws = wb.active
     ws.title = '請求明細'
+
+    # タイトル行
     ws.merge_cells('A1:G1')
     ws['A1'] = f'{client_name}　Indeed請求明細　{month_label}'
-    ws['A1'].font = Font(name='Arial', size=13, bold=True, color=WHITE)
+    ws['A1'].font = Font(name=FONT_NAME, size=13, bold=True, color=WHITE)
     ws['A1'].fill = PatternFill('solid', fgColor=HEADER_BG)
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws['A1'].border = header_border()
     ws.row_dimensions[1].height = 30
+
+    # ヘッダー行
     headers = ['アカウント名','キャンペーン名','開始日','終了日','ステータス','キャンペーン費消額（円）','アカウント合計費消額（円）']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col, value=h)
-        cell.font = Font(name='Arial', size=10, bold=True, color=WHITE)
+        cell.font = Font(name=FONT_NAME, size=10, bold=True, color=WHITE)
         cell.fill = PatternFill('solid', fgColor='2E75B6')
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = thin_border()
+        cell.border = all_border(color='1F4E79', style='medium')
     ws.row_dimensions[2].height = 28
+
+    # データ行
     account_order = merged['Employer ID'].unique()
     fill_white = PatternFill('solid', fgColor=WHITE)
     fill_gray = PatternFill('solid', fgColor=GRAY)
+
     row = 3
     for i, acc_id in enumerate(account_order):
         grp = merged[merged['Employer ID'] == acc_id].reset_index(drop=True)
         acc_name = grp['Client name'].iloc[0]
         fill = fill_gray if i % 2 == 0 else fill_white
         start_row = row
+
         for j, r in grp.iterrows():
             camp_fee = r['合計費用_数値'] if pd.notna(r['合計費用_数値']) else 0
-            ws.cell(row=row, column=1, value=acc_name if j == 0 else '')
-            ws.cell(row=row, column=2, value=r.get('キャンペーン名',''))
-            ws.cell(row=row, column=3, value=r.get('キャンペーン開始日',''))
-            ws.cell(row=row, column=4, value=r.get('キャンペーン終了日 (指定した日付)',''))
-            ws.cell(row=row, column=5, value=r.get('キャンペーンステータス',''))
-            ws.cell(row=row, column=6, value=int(camp_fee))
-            ws.cell(row=row, column=7, value='')
-            for col in range(1, 8):
-                cell = ws.cell(row=row, column=col)
-                cell.font = Font(name='Arial', size=9)
+            values = [
+                acc_name if j == 0 else '',
+                r.get('キャンペーン名',''),
+                r.get('キャンペーン開始日',''),
+                r.get('キャンペーン終了日 (指定した日付)',''),
+                r.get('キャンペーンステータス',''),
+                int(camp_fee),
+                ''
+            ]
+            for col, val in enumerate(values, 1):
+                cell = ws.cell(row=row, column=col, value=val)
+                cell.font = Font(name=FONT_NAME, size=9)
                 cell.fill = fill
-                cell.border = thin_border()
+                cell.border = all_border(color='AAAAAA', style='thin')
                 cell.alignment = Alignment(vertical='center', wrap_text=True)
                 if col in (6, 7):
                     cell.number_format = '#,##0'
@@ -137,33 +160,55 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
                     cell.alignment = Alignment(horizontal='center', vertical='center')
             ws.row_dimensions[row].height = 22
             row += 1
+
         end_row = row - 1
+
+        # アカウント名・合計列を縦結合
         if start_row < end_row:
             ws.merge_cells(f'A{start_row}:A{end_row}')
             ws.merge_cells(f'G{start_row}:G{end_row}')
+
         ws[f'A{start_row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        ws[f'A{start_row}'].font = Font(name='Arial', size=9, bold=True)
+        ws[f'A{start_row}'].font = Font(name=FONT_NAME, size=9, bold=True)
+
+        # アカウント合計にSUM式
         tc = ws.cell(row=start_row, column=7)
         tc.value = f'=SUM(F{start_row}:F{end_row})'
         tc.number_format = '#,##0'
         tc.alignment = Alignment(horizontal='right', vertical='center')
-        tc.font = Font(name='Arial', size=9, bold=True)
+        tc.font = Font(name=FONT_NAME, size=9, bold=True)
+
+        # 結合セルの罫線を再適用（途切れ防止）
+        for r2 in range(start_row, end_row + 1):
+            for c2 in [1, 7]:
+                cell = ws.cell(row=r2, column=c2)
+                cell.border = all_border(color='AAAAAA', style='thin')
+
+    # 合計行
     total_row = row
     ws.merge_cells(f'A{total_row}:E{total_row}')
     ws[f'A{total_row}'] = '合　計'
-    ws[f'A{total_row}'].font = Font(name='Arial', size=10, bold=True)
+    ws[f'A{total_row}'].font = Font(name=FONT_NAME, size=10, bold=True)
     ws[f'A{total_row}'].fill = PatternFill('solid', fgColor=TOTAL_BG)
     ws[f'A{total_row}'].alignment = Alignment(horizontal='center', vertical='center')
-    ws[f'A{total_row}'].border = medium_border()
+    ws[f'A{total_row}'].border = total_border()
+
+    for col in range(2, 6):
+        cell = ws.cell(row=total_row, column=col)
+        cell.fill = PatternFill('solid', fgColor=TOTAL_BG)
+        cell.border = total_border()
+
     for col in (6, 7):
         cell = ws.cell(row=total_row, column=col)
         cell.value = f'=SUM(F3:F{total_row-1})'
-        cell.font = Font(name='Arial', size=10, bold=True)
+        cell.font = Font(name=FONT_NAME, size=10, bold=True)
         cell.fill = PatternFill('solid', fgColor=TOTAL_BG)
         cell.number_format = '#,##0'
         cell.alignment = Alignment(horizontal='right', vertical='center')
-        cell.border = medium_border()
+        cell.border = total_border()
     ws.row_dimensions[total_row].height = 24
+
+    # 列幅
     ws.column_dimensions['A'].width = 32
     ws.column_dimensions['B'].width = 44
     ws.column_dimensions['C'].width = 13
@@ -175,12 +220,13 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.freeze_panes = 'A3'
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf, diff
 
-# ==================== フォルダID永続化（Secretsから初期値読み込み）====================
+# ==================== フォルダID永続化 ====================
 try:
     default_inv = st.secrets["FOLDER_IDS"]["FOLDER_ID_INV"]
 except:
@@ -210,6 +256,7 @@ month_options = {
     "2026年1月": ("2026-01-01", "Indeed_2026年1月.xlsx"),
     "2026年2月": ("2026-02-01", "Indeed_2026年2月.xlsx"),
     "2026年3月": ("2026-03-01", "Indeed_2026年3月.xlsx"),
+    "2026年4月": ("2026-04-01", "Indeed_2026年4月.xlsx"),
 }
 
 col1, col2 = st.columns([1, 1], gap="large")

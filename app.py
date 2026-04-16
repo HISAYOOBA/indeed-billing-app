@@ -8,95 +8,40 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-
-# ==================== ページ設定 ====================
+ 
 st.set_page_config(
     page_title="Indeed請求明細ジェネレーター",
     page_icon="📊",
     layout="wide"
 )
-
-# ==================== スタイル ====================
+ 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Inter:wght@400;600;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Noto Sans JP', sans-serif;
-}
-
-.main-title {
-    font-family: 'Inter', sans-serif;
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1F4E79;
-    border-left: 6px solid #2E75B6;
-    padding-left: 16px;
-    margin-bottom: 8px;
-}
-
-.sub-title {
-    color: #555;
-    font-size: 0.95rem;
-    margin-bottom: 32px;
-    padding-left: 22px;
-}
-
-.section-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
-}
-
-.stButton > button {
-    background-color: #1F4E79;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 700;
-    padding: 12px 32px;
-    width: 100%;
-    transition: all 0.2s;
-}
-
-.stButton > button:hover {
-    background-color: #2E75B6;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(31,78,121,0.3);
-}
-
-.result-box {
-    background: #e8f5e9;
-    border: 1px solid #a5d6a7;
-    border-radius: 8px;
-    padding: 16px;
-    color: #2e7d32;
-    font-weight: 600;
-}
-
-.error-box {
-    background: #ffebee;
-    border: 1px solid #ef9a9a;
-    border-radius: 8px;
-    padding: 16px;
-    color: #c62828;
-}
+html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif; }
+.main-title { font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: #1F4E79; border-left: 6px solid #2E75B6; padding-left: 16px; margin-bottom: 8px; }
+.sub-title { color: #555; font-size: 0.95rem; margin-bottom: 32px; padding-left: 22px; }
+.section-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.stButton > button { background-color: #1F4E79; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; padding: 12px 32px; width: 100%; transition: all 0.2s; }
+.stButton > button:hover { background-color: #2E75B6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(31,78,121,0.3); }
+.result-box { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; padding: 16px; color: #2e7d32; font-weight: 600; }
+.error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 16px; color: #c62828; }
 </style>
 """, unsafe_allow_html=True)
-
+ 
 # ==================== Google Drive 接続 ====================
 def get_drive_service():
-    creds_json = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
-    creds_dict = json.loads(creds_json) if isinstance(creds_json, str) else dict(creds_json)
+    # TOML形式（[GOOGLE_SERVICE_ACCOUNT]セクション）で読み込む
+    creds_info = dict(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+    # private_keyの改行コードを正しく処理
+    if "private_key" in creds_info:
+        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
     creds = service_account.Credentials.from_service_account_info(
-        creds_dict,
+        creds_info,
         scopes=["https://www.googleapis.com/auth/drive.readonly"]
     )
     return build("drive", "v3", credentials=creds)
-
+ 
 def list_files_in_folder(service, folder_id):
     results = service.files().list(
         q=f"'{folder_id}' in parents and trashed=false",
@@ -104,8 +49,8 @@ def list_files_in_folder(service, folder_id):
         orderBy="name"
     ).execute()
     return results.get("files", [])
-
-def download_file(service, file_id, mime_type):
+ 
+def download_file(service, file_id):
     request = service.files().get_media(fileId=file_id)
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
@@ -114,7 +59,7 @@ def download_file(service, file_id, mime_type):
         _, done = downloader.next_chunk()
     buf.seek(0)
     return buf
-
+ 
 # ==================== Excel生成 ====================
 def parse_yen(val):
     if pd.isna(val): return 0
@@ -123,25 +68,22 @@ def parse_yen(val):
         return int(float(s))
     except:
         return 0
-
+ 
 def thin_border():
     s = Side(style='thin', color='CCCCCC')
     return Border(left=s, right=s, top=s, bottom=s)
-
+ 
 def medium_border():
     s = Side(style='medium', color='1F4E79')
     return Border(left=s, right=s, top=s, bottom=s)
-
+ 
 def create_billing_excel(client_name, inv_df, csv_df, month_label):
-    """費消額Excelを生成してbytesで返す"""
-    # 突合
     hits_inv = inv_df[inv_df['Client name'].str.contains(client_name, na=False)].copy()
     if len(hits_inv) == 0:
         return None, f"「{client_name}」に一致するクライアントが見つかりませんでした"
-
+ 
     target_ids = hits_inv['Employer ID'].tolist()
-
-    # CSV側：縦持ち（メジャーネーム列あり）か横持ち（合計費用列あり）かを判定
+ 
     if 'メジャー ネーム' in csv_df.columns:
         cost_df = csv_df[(csv_df['アカウントID'].isin(target_ids)) &
                          (csv_df['メジャー ネーム'] == '合計費用')].copy()
@@ -151,34 +93,33 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cost_df['合計費用_数値'] = cost_df['合計費用'].apply(parse_yen)
     else:
         return None, "CSVの形式を認識できませんでした"
-
+ 
     merged = hits_inv.merge(
         cost_df[['アカウントID','アカウント名','キャンペーン名','キャンペーン開始日',
                  'キャンペーン終了日 (指定した日付)','キャンペーンステータス','合計費用_数値']],
         left_on='Employer ID', right_on='アカウントID', how='left'
     )
-
-    # 差異チェック
+ 
     inv_total = hits_inv['費消額'].sum()
     csv_total = cost_df['合計費用_数値'].sum()
     diff = inv_total - csv_total
-
+ 
     HEADER_BG = '1F4E79'
     WHITE = 'FFFFFF'
     GRAY = 'F5F5F5'
     TOTAL_BG = 'FFF2CC'
-
+ 
     wb = Workbook()
     ws = wb.active
     ws.title = '請求明細'
-
+ 
     ws.merge_cells('A1:G1')
     ws['A1'] = f'{client_name}　Indeed請求明細　{month_label}'
     ws['A1'].font = Font(name='Arial', size=13, bold=True, color=WHITE)
     ws['A1'].fill = PatternFill('solid', fgColor=HEADER_BG)
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = 30
-
+ 
     headers = ['アカウント名','キャンペーン名','開始日','終了日','ステータス','キャンペーン費消額（円）','アカウント合計費消額（円）']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col, value=h)
@@ -187,18 +128,18 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell.border = thin_border()
     ws.row_dimensions[2].height = 28
-
+ 
     account_order = merged['Employer ID'].unique()
     fill_white = PatternFill('solid', fgColor=WHITE)
     fill_gray = PatternFill('solid', fgColor=GRAY)
-
+ 
     row = 3
     for i, acc_id in enumerate(account_order):
         grp = merged[merged['Employer ID'] == acc_id].reset_index(drop=True)
         acc_name = grp['Client name'].iloc[0]
         fill = fill_gray if i % 2 == 0 else fill_white
         start_row = row
-
+ 
         for j, r in grp.iterrows():
             camp_fee = r['合計費用_数値'] if pd.notna(r['合計費用_数値']) else 0
             ws.cell(row=row, column=1, value=acc_name if j == 0 else '')
@@ -208,7 +149,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
             ws.cell(row=row, column=5, value=r.get('キャンペーンステータス',''))
             ws.cell(row=row, column=6, value=int(camp_fee))
             ws.cell(row=row, column=7, value='')
-
+ 
             for col in range(1, 8):
                 cell = ws.cell(row=row, column=col)
                 cell.font = Font(name='Arial', size=9)
@@ -223,7 +164,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
                     cell.alignment = Alignment(horizontal='center', vertical='center')
             ws.row_dimensions[row].height = 22
             row += 1
-
+ 
         end_row = row - 1
         if start_row < end_row:
             ws.merge_cells(f'A{start_row}:A{end_row}')
@@ -235,7 +176,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         tc.number_format = '#,##0'
         tc.alignment = Alignment(horizontal='right', vertical='center')
         tc.font = Font(name='Arial', size=9, bold=True)
-
+ 
     total_row = row
     ws.merge_cells(f'A{total_row}:E{total_row}')
     ws[f'A{total_row}'] = '合　計'
@@ -252,7 +193,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='right', vertical='center')
         cell.border = medium_border()
     ws.row_dimensions[total_row].height = 24
-
+ 
     ws.column_dimensions['A'].width = 32
     ws.column_dimensions['B'].width = 44
     ws.column_dimensions['C'].width = 13
@@ -264,35 +205,26 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.freeze_panes = 'A3'
-
+ 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf, diff
-
+ 
 # ==================== UI ====================
 st.markdown('<div class="main-title">📊 Indeed請求明細ジェネレーター</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Google DriveのデータからクライアントごとのIndeed請求明細Excelを自動生成します</div>', unsafe_allow_html=True)
-
-# サイドバー：Google Drive設定
+ 
 with st.sidebar:
     st.header("⚙️ Google Drive設定")
     st.markdown("---")
-    folder_id_inv = st.text_input(
-        "📁 請求データ（Excel）フォルダID",
-        placeholder="Google DriveのフォルダIDを入力",
-        help="Google DriveのフォルダURLの末尾の文字列がフォルダIDです"
-    )
-    folder_id_csv = st.text_input(
-        "📁 キャンペーンパフォーマンス（CSV）フォルダID",
-        placeholder="Google DriveのフォルダIDを入力"
-    )
+    folder_id_inv = st.text_input("📁 請求データ（Excel）フォルダID", placeholder="Google DriveのフォルダIDを入力")
+    folder_id_csv = st.text_input("📁 キャンペーンパフォーマンス（CSV）フォルダID", placeholder="Google DriveのフォルダIDを入力")
     st.markdown("---")
     st.caption("※ サービスアカウントのメールアドレスを各フォルダに共有してください")
-
-# メイン
+ 
 col1, col2 = st.columns([1, 1], gap="large")
-
+ 
 with col1:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("① 対象月を選択")
@@ -303,19 +235,16 @@ with col1:
     }
     selected_month = st.selectbox("対象月", list(month_options.keys()))
     st.markdown('</div>', unsafe_allow_html=True)
-
+ 
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("② クライアント名を入力")
-    client_name = st.text_input(
-        "クライアント名（部分一致）",
-        placeholder="例：JSS、ノムラメディアス、ORES など"
-    )
+    client_name = st.text_input("クライアント名（部分一致）", placeholder="例：JSS、ノムラメディアス、ORES など")
     st.markdown('</div>', unsafe_allow_html=True)
-
+ 
 with col2:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("③ Driveからデータを取得して生成")
-
+ 
     if st.button("📥 請求明細Excelを生成", use_container_width=True):
         if not folder_id_inv or not folder_id_csv:
             st.error("サイドバーでGoogle DriveのフォルダIDを設定してください")
@@ -325,26 +254,25 @@ with col2:
             with st.spinner("Google Driveからデータを取得中..."):
                 try:
                     service = get_drive_service()
-                    month_key, month_label = month_options[selected_month][0], selected_month
+                    month_key = month_options[selected_month][0]
+                    month_label = selected_month
                     inv_filename = month_options[selected_month][1]
-
-                    # Excelファイル取得
+ 
                     inv_files = list_files_in_folder(service, folder_id_inv)
                     inv_file = next((f for f in inv_files if f['name'] == inv_filename), None)
                     if not inv_file:
                         st.error(f"{inv_filename} がGoogle Driveに見つかりません")
                         st.stop()
-
-                    inv_buf = download_file(service, inv_file['id'], inv_file['mimeType'])
+ 
+                    inv_buf = download_file(service, inv_file['id'])
                     inv_df = pd.read_excel(inv_buf)
-
-                    # CSVファイル取得（対象月を含むもの）
+ 
                     csv_files = list_files_in_folder(service, folder_id_csv)
                     csv_dfs = []
                     for f in csv_files:
                         if f['name'].endswith('.csv'):
                             try:
-                                buf = download_file(service, f['id'], f['mimeType'])
+                                buf = download_file(service, f['id'])
                                 try:
                                     df = pd.read_csv(buf, encoding='utf-8')
                                 except:
@@ -356,17 +284,16 @@ with col2:
                                         csv_dfs.append(df_month)
                             except:
                                 pass
-
+ 
                     if not csv_dfs:
                         st.error(f"{selected_month}のキャンペーンパフォーマンスデータが見つかりません")
                         st.stop()
-
+ 
                     csv_df = pd.concat(csv_dfs, ignore_index=True).drop_duplicates()
-
-                    st.success(f"データ取得完了！Excel生成中...")
-
+                    st.success("データ取得完了！Excel生成中...")
+ 
                     result_buf, diff = create_billing_excel(client_name, inv_df, csv_df, month_label)
-
+ 
                     if result_buf is None:
                         st.error(diff)
                     else:
@@ -379,15 +306,14 @@ with col2:
                             use_container_width=True
                         )
                         if diff == 0:
-                            st.markdown(f'<div class="result-box">✅ 突合完了・差異ゼロ　合計費消額が一致しました</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="result-box">✅ 突合完了・差異ゼロ　合計費消額が一致しました</div>', unsafe_allow_html=True)
                         else:
                             st.markdown(f'<div class="error-box">⚠️ 差異あり：¥{abs(int(diff)):,}　データを確認してください</div>', unsafe_allow_html=True)
-
+ 
                 except Exception as e:
                     st.error(f"エラーが発生しました：{e}")
-
+ 
     st.markdown('</div>', unsafe_allow_html=True)
-
-# フッター
+ 
 st.markdown("---")
 st.caption("※ Google Driveのフォルダにサービスアカウントのメールを「閲覧者」として共有してください")

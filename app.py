@@ -238,19 +238,22 @@ except:
 
 # ==================== UI ====================
 st.markdown("""
+<style>
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
+
+folder_id_inv = default_inv
+folder_id_csv = default_csv
+st.markdown("""
 <div class="title-bar">
     <div class="main-title">📊 Indeed請求明細ジェネレーター</div>
     <div class="sub-title">Google DriveのデータからクライアントごとのIndeed請求明細Excelを自動生成します</div>
 </div>
 """, unsafe_allow_html=True)
 
-with st.sidebar:
-    st.header("⚙️ Google Drive設定")
-    st.markdown("---")
-    folder_id_inv = st.text_input("📁 請求データ（Excel）フォルダID", value=default_inv, placeholder="Google DriveのフォルダIDを入力")
-    folder_id_csv = st.text_input("📁 キャンペーンパフォーマンス（CSV）フォルダID", value=default_csv, placeholder="Google DriveのフォルダIDを入力")
-    st.markdown("---")
-    st.caption("※ サービスアカウントのメールアドレスを各フォルダに共有してください")
+
 
 month_options = {
     "2026年1月": ("2026-01-01", "Indeed_2026年1月.xlsx"),
@@ -359,4 +362,4 @@ with col2:
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("---")
-st.caption("※ Google Driveのフォルダにサービスアカウントのメールを「閲覧者」として共有してください")
+st.caption("© Indeed請求明細ジェネレーター")

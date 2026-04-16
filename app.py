@@ -130,8 +130,9 @@ def write_log(client_name, months, diff_results):
             insertDataOption="INSERT_ROWS",
             body={"values": row}
         ).execute()
+        return None  # 成功
     except Exception as e:
-        pass  # ログ失敗してもアプリは継続
+        return str(e)  # エラー内容を返す
 
 # ==================== Excel生成 ====================
 def parse_yen(val):
@@ -373,7 +374,9 @@ with col2:
 
                     if results:
                         # ログ記録
-                        write_log(client_name, selected_months, diff_results)
+                        log_error = write_log(client_name, selected_months, diff_results)
+                        if log_error:
+                            st.warning(f"⚠️ ログ記録エラー：{log_error}")
 
                         st.success(f"データ取得完了！{len(results)}件のExcelを生成しました")
                         for month_label, result_buf, diff in results:

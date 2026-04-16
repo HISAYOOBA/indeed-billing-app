@@ -182,11 +182,11 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
 
 # ==================== フォルダID永続化（Secretsから初期値読み込み）====================
 try:
-    default_inv = st.secrets["FOLDER_ID_INV"]
+    default_inv = st.secrets["FOLDER_IDS"]["FOLDER_ID_INV"]
 except:
     default_inv = ""
 try:
-    default_csv = st.secrets["FOLDER_ID_CSV"]
+    default_csv = st.secrets["FOLDER_IDS"]["FOLDER_ID_CSV"]
 except:
     default_csv = ""
 

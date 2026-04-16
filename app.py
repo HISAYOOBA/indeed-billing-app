@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+from datetime import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -17,6 +18,8 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Inter:wght@400;600;700&display=swap');
 html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif; }
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
 .title-bar { background: linear-gradient(135deg, #1F4E79, #2E75B6); padding: 20px 28px 16px 28px; border-radius: 12px; margin-bottom: 10px; }
 .main-title { font-family: 'Inter', sans-serif; font-size: 1.8rem; font-weight: 700; color: #FFFFFF; margin: 0; padding: 0; }
 .sub-title { color: #CBD5E1; font-size: 0.88rem; margin-top: 4px; }
@@ -25,18 +28,56 @@ html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif; }
 .stButton > button:hover { background-color: #2E75B6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(31,78,121,0.3); }
 .result-box { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; padding: 14px; color: #2e7d32; font-weight: 600; margin-top: 10px; }
 .error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 14px; color: #c62828; margin-top: 10px; }
+.login-box { max-width: 400px; margin: 80px auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 40px; text-align: center; }
+.login-title { font-size: 1.2rem; font-weight: 700; color: #1F4E79; margin-bottom: 20px; }
 hr { margin: 8px 0 !important; border-color: #e2e8f0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-def get_drive_service():
+# ==================== パスワード認証 ====================
+CORRECT_PASSWORD = st.secrets.get("APP_PASSWORD", "rs5489-4191")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div class="title-bar">
+        <div class="main-title">📊 Indeed請求明細ジェネレーター</div>
+        <div class="sub-title">Google DriveのデータからクライアントごとのIndeed請求明細Excelを自動生成します</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">🔐 ログイン</div>', unsafe_allow_html=True)
+    password_input = st.text_input("パスワードを入力してください", type="password")
+    if st.button("ログイン", use_container_width=True):
+        if password_input == CORRECT_PASSWORD:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("パスワードが正しくありません")
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+# ==================== Google Drive / Sheets 接続 ====================
+def get_credentials():
     creds_info = dict(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
     if "private_key" in creds_info:
         creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-    creds = service_account.Credentials.from_service_account_info(
-        creds_info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+    return service_account.Credentials.from_service_account_info(
+        creds_info,
+        scopes=[
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/spreadsheets"
+        ]
     )
-    return build("drive", "v3", credentials=creds)
+
+def get_drive_service():
+    return build("drive", "v3", credentials=get_credentials())
+
+def get_sheets_service():
+    return build("sheets", "v4", credentials=get_credentials())
 
 def list_files_in_folder(service, folder_id):
     results = service.files().list(
@@ -55,14 +96,51 @@ def download_file(service, file_id):
     buf.seek(0)
     return buf
 
+# ==================== ログ記録 ====================
+SPREADSHEET_ID = "1ge34r5lmRi6st9hFOJvzMEvdh4MRC8csHQHvhXHs5oY"
+
+def write_log(client_name, months, diff_results):
+    try:
+        sheets = get_sheets_service()
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        month_str = "・".join(months)
+        diff_str = "　".join([
+            f"{m}:{'差異なし' if d == 0 else f'差異¥{abs(int(d)):,}'}"
+            for m, d in diff_results
+        ])
+        row = [[now, client_name, month_str, diff_str]]
+
+        # ヘッダーが存在しない場合は追加
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range="アクセスログ!A1:D1"
+        ).execute()
+        if not result.get("values"):
+            sheets.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range="アクセスログ!A1:D1",
+                valueInputOption="RAW",
+                body={"values": [["日時", "クライアント名", "対象月", "突合結果"]]}
+            ).execute()
+
+        sheets.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range="アクセスログ!A:D",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": row}
+        ).execute()
+    except Exception as e:
+        pass  # ログ失敗してもアプリは継続
+
+# ==================== Excel生成 ====================
 def parse_yen(val):
     if pd.isna(val): return 0
     s = str(val).replace('￥','').replace(',','').strip()
     try: return int(float(s))
     except: return 0
 
-# ==================== 罫線：全辺を統一した実線で定義 ====================
-FONT_NAME = 'メイリオ'  # ゴシック体
+FONT_NAME = 'メイリオ'
 
 def all_border(color='AAAAAA', style='thin'):
     s = Side(style=style, color=color)
@@ -94,17 +172,10 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         left_on='Employer ID', right_on='アカウントID', how='left'
     )
     diff = hits_inv['費消額'].sum() - cost_df['合計費用_数値'].sum()
-
-    HEADER_BG = '1F4E79'
-    WHITE = 'FFFFFF'
-    GRAY = 'F0F4F8'
-    TOTAL_BG = 'FFF2CC'
-
+    HEADER_BG, WHITE, GRAY, TOTAL_BG = '1F4E79', 'FFFFFF', 'F0F4F8', 'FFF2CC'
     wb = Workbook()
     ws = wb.active
     ws.title = '請求明細'
-
-    # タイトル行
     ws.merge_cells('A1:G1')
     ws['A1'] = f'{client_name}　Indeed請求明細　{month_label}'
     ws['A1'].font = Font(name=FONT_NAME, size=13, bold=True, color=WHITE)
@@ -112,8 +183,6 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws['A1'].border = header_border()
     ws.row_dimensions[1].height = 30
-
-    # ヘッダー行
     headers = ['アカウント名','キャンペーン名','開始日','終了日','ステータス','キャンペーン費消額（円）','アカウント合計費消額（円）']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col, value=h)
@@ -122,30 +191,18 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell.border = all_border(color='1F4E79', style='medium')
     ws.row_dimensions[2].height = 28
-
-    # データ行
     account_order = merged['Employer ID'].unique()
     fill_white = PatternFill('solid', fgColor=WHITE)
     fill_gray = PatternFill('solid', fgColor=GRAY)
-
     row = 3
     for i, acc_id in enumerate(account_order):
         grp = merged[merged['Employer ID'] == acc_id].reset_index(drop=True)
         acc_name = grp['Client name'].iloc[0]
         fill = fill_gray if i % 2 == 0 else fill_white
         start_row = row
-
         for j, r in grp.iterrows():
             camp_fee = r['合計費用_数値'] if pd.notna(r['合計費用_数値']) else 0
-            values = [
-                acc_name if j == 0 else '',
-                r.get('キャンペーン名',''),
-                r.get('キャンペーン開始日',''),
-                r.get('キャンペーン終了日 (指定した日付)',''),
-                r.get('キャンペーンステータス',''),
-                int(camp_fee),
-                ''
-            ]
+            values = [acc_name if j == 0 else '', r.get('キャンペーン名',''), r.get('キャンペーン開始日',''), r.get('キャンペーン終了日 (指定した日付)',''), r.get('キャンペーンステータス',''), int(camp_fee), '']
             for col, val in enumerate(values, 1):
                 cell = ws.cell(row=row, column=col, value=val)
                 cell.font = Font(name=FONT_NAME, size=9)
@@ -160,31 +217,20 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
                     cell.alignment = Alignment(horizontal='center', vertical='center')
             ws.row_dimensions[row].height = 22
             row += 1
-
         end_row = row - 1
-
-        # アカウント名・合計列を縦結合
         if start_row < end_row:
             ws.merge_cells(f'A{start_row}:A{end_row}')
             ws.merge_cells(f'G{start_row}:G{end_row}')
-
         ws[f'A{start_row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         ws[f'A{start_row}'].font = Font(name=FONT_NAME, size=9, bold=True)
-
-        # アカウント合計にSUM式
         tc = ws.cell(row=start_row, column=7)
         tc.value = f'=SUM(F{start_row}:F{end_row})'
         tc.number_format = '#,##0'
         tc.alignment = Alignment(horizontal='right', vertical='center')
         tc.font = Font(name=FONT_NAME, size=9, bold=True)
-
-        # 結合セルの罫線を再適用（途切れ防止）
         for r2 in range(start_row, end_row + 1):
             for c2 in [1, 7]:
-                cell = ws.cell(row=r2, column=c2)
-                cell.border = all_border(color='AAAAAA', style='thin')
-
-    # 合計行
+                ws.cell(row=r2, column=c2).border = all_border(color='AAAAAA', style='thin')
     total_row = row
     ws.merge_cells(f'A{total_row}:E{total_row}')
     ws[f'A{total_row}'] = '合　計'
@@ -192,12 +238,10 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws[f'A{total_row}'].fill = PatternFill('solid', fgColor=TOTAL_BG)
     ws[f'A{total_row}'].alignment = Alignment(horizontal='center', vertical='center')
     ws[f'A{total_row}'].border = total_border()
-
     for col in range(2, 6):
         cell = ws.cell(row=total_row, column=col)
         cell.fill = PatternFill('solid', fgColor=TOTAL_BG)
         cell.border = total_border()
-
     for col in (6, 7):
         cell = ws.cell(row=total_row, column=col)
         cell.value = f'=SUM(F3:F{total_row-1})'
@@ -207,8 +251,6 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='right', vertical='center')
         cell.border = total_border()
     ws.row_dimensions[total_row].height = 24
-
-    # 列幅
     ws.column_dimensions['A'].width = 32
     ws.column_dimensions['B'].width = 44
     ws.column_dimensions['C'].width = 13
@@ -220,13 +262,12 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.freeze_panes = 'A3'
-
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf, diff
 
-# ==================== フォルダID永続化 ====================
+# ==================== フォルダID ====================
 try:
     default_inv = st.secrets["FOLDER_IDS"]["FOLDER_ID_INV"]
 except:
@@ -236,24 +277,16 @@ try:
 except:
     default_csv = ""
 
-# ==================== UI ====================
-st.markdown("""
-<style>
-[data-testid="stSidebar"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
-</style>
-""", unsafe_allow_html=True)
-
 folder_id_inv = default_inv
 folder_id_csv = default_csv
+
+# ==================== UI ====================
 st.markdown("""
 <div class="title-bar">
     <div class="main-title">📊 Indeed請求明細ジェネレーター</div>
     <div class="sub-title">Google DriveのデータからクライアントごとのIndeed請求明細Excelを自動生成します</div>
 </div>
 """, unsafe_allow_html=True)
-
-
 
 month_options = {
     "2026年1月": ("2026-01-01", "Indeed_2026年1月.xlsx"),
@@ -281,7 +314,7 @@ with col2:
 
     if st.button("📥 請求明細Excelを生成", use_container_width=True):
         if not folder_id_inv or not folder_id_csv:
-            st.error("サイドバーでGoogle DriveのフォルダIDを設定してください")
+            st.error("フォルダIDが設定されていません。Secretsを確認してください")
         elif not client_name:
             st.error("クライアント名を入力してください")
         elif not selected_months:
@@ -290,8 +323,6 @@ with col2:
             with st.spinner("Google Driveからデータを取得中..."):
                 try:
                     service = get_drive_service()
-
-                    # CSVを一括取得
                     csv_files = list_files_in_folder(service, folder_id_csv)
                     all_csv_df = None
                     for f in csv_files:
@@ -317,9 +348,9 @@ with col2:
                         st.stop()
 
                     all_csv_df = all_csv_df.drop_duplicates()
-
-                    # 月ごとにExcel生成
                     results = []
+                    diff_results = []
+
                     for month_label in selected_months:
                         month_key, inv_filename = month_options[month_label]
                         inv_files = list_files_in_folder(service, folder_id_inv)
@@ -338,8 +369,12 @@ with col2:
                             st.error(diff)
                         else:
                             results.append((month_label, result_buf, diff))
+                            diff_results.append((month_label, diff))
 
                     if results:
+                        # ログ記録
+                        write_log(client_name, selected_months, diff_results)
+
                         st.success(f"データ取得完了！{len(results)}件のExcelを生成しました")
                         for month_label, result_buf, diff in results:
                             fname = f"{client_name}_Indeed請求明細_{month_label}.xlsx"

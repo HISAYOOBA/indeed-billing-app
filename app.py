@@ -112,7 +112,6 @@ def write_log(client_name, months, diff_results):
         ])
         row = [[now, client_name, month_str, diff_str]]
 
-        # ヘッダーが存在しない場合は追加
         result = sheets.spreadsheets().values().get(
             spreadsheetId=SPREADSHEET_ID,
             range="アクセスログ!A1:D1"
@@ -132,9 +131,9 @@ def write_log(client_name, months, diff_results):
             insertDataOption="INSERT_ROWS",
             body={"values": row}
         ).execute()
-        return None  # 成功
+        return None
     except Exception as e:
-        return str(e)  # エラー内容を返す
+        return str(e)
 
 # ==================== Excel生成 ====================
 def parse_yen(val):
@@ -157,24 +156,47 @@ def total_border():
     s = Side(style='medium', color='1F4E79')
     return Border(left=s, right=s, top=s, bottom=s)
 
-def create_billing_excel(client_name, inv_df, csv_df, month_label):
+def get_month_end(month_key):
+    """month_key (例: '2026-06-01') からその月の末日を返す"""
+    dt = pd.Timestamp(month_key)
+    # 翌月1日の1日前 = 末日
+    next_month = dt + pd.offsets.MonthEnd(0)
+    return next_month
+
+def create_billing_excel(client_name, inv_df, csv_df, month_label, month_key):
     hits_inv = inv_df[inv_df['Client name'].str.contains(client_name, na=False)].copy()
     if len(hits_inv) == 0:
         return None, f"「{client_name}」に一致するクライアントが見つかりませんでした"
+
     target_ids = hits_inv['Employer ID'].tolist()
+    month_end = get_month_end(month_key)
+
     if 'メジャー ネーム' in csv_df.columns:
-        cost_df = csv_df[(csv_df['アカウントID'].isin(target_ids)) & (csv_df['メジャー ネーム'] == '合計費用')].copy()
+        cost_df = csv_df[
+            (csv_df['アカウントID'].isin(target_ids)) &
+            (csv_df['メジャー ネーム'] == '合計費用')
+        ].copy()
         cost_df['合計費用_数値'] = cost_df['メジャー バリュー'].fillna(0).astype(float).astype(int)
     elif '合計費用' in csv_df.columns:
         cost_df = csv_df[csv_df['アカウントID'].isin(target_ids)].copy()
         cost_df['合計費用_数値'] = cost_df['合計費用'].apply(parse_yen)
     else:
         return None, "CSVの形式を認識できませんでした"
+
+    # ★ キャンペーン終了日が対象月末日以内のものだけに絞る
+    cost_df['終了日_dt'] = pd.to_datetime(cost_df['キャンペーン終了日 (指定した日付)'], errors='coerce')
+    cost_df = cost_df[cost_df['終了日_dt'] <= month_end].copy()
+
     merged = hits_inv.merge(
         cost_df[['アカウントID','アカウント名','キャンペーン名','キャンペーン開始日','キャンペーン終了日 (指定した日付)','キャンペーンステータス','合計費用_数値']],
-        left_on='Employer ID', right_on='アカウントID', how='left'
+        left_on='Employer ID', right_on='アカウントID', how='inner'
     )
+
+    if len(merged) == 0:
+        return None, f"「{client_name}」の{month_label}に対象月末日以内のキャンペーンが見つかりませんでした"
+
     diff = hits_inv['費消額'].sum() - cost_df['合計費用_数値'].sum()
+
     HEADER_BG, WHITE, GRAY, TOTAL_BG = '1F4E79', 'FFFFFF', 'F0F4F8', 'FFF2CC'
     wb = Workbook()
     ws = wb.active
@@ -186,6 +208,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
     ws['A1'].border = header_border()
     ws.row_dimensions[1].height = 30
+
     headers = ['アカウント名','キャンペーン名','開始日','終了日','ステータス','キャンペーン費消額（円）','アカウント合計費消額（円）']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col, value=h)
@@ -194,6 +217,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         cell.border = all_border(color='1F4E79', style='medium')
     ws.row_dimensions[2].height = 28
+
     account_order = merged['Employer ID'].unique()
     fill_white = PatternFill('solid', fgColor=WHITE)
     fill_gray = PatternFill('solid', fgColor=GRAY)
@@ -234,6 +258,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         for r2 in range(start_row, end_row + 1):
             for c2 in [1, 7]:
                 ws.cell(row=r2, column=c2).border = all_border(color='AAAAAA', style='thin')
+
     total_row = row
     ws.merge_cells(f'A{total_row}:E{total_row}')
     ws[f'A{total_row}'] = '合　計'
@@ -254,6 +279,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
         cell.alignment = Alignment(horizontal='right', vertical='center')
         cell.border = total_border()
     ws.row_dimensions[total_row].height = 24
+
     ws.column_dimensions['A'].width = 32
     ws.column_dimensions['B'].width = 44
     ws.column_dimensions['C'].width = 13
@@ -265,6 +291,7 @@ def create_billing_excel(client_name, inv_df, csv_df, month_label):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.freeze_panes = 'A3'
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -369,7 +396,8 @@ with col2:
                         if len(csv_month) == 0:
                             st.warning(f"⚠️ {month_label}のキャンペーンデータが見つかりません（スキップ）")
                             continue
-                        result_buf, diff = create_billing_excel(client_name, inv_df, csv_month, month_label)
+                        # ★ month_key を渡すよう変更
+                        result_buf, diff = create_billing_excel(client_name, inv_df, csv_month, month_label, month_key)
                         if result_buf is None:
                             st.error(diff)
                         else:
@@ -377,7 +405,6 @@ with col2:
                             diff_results.append((month_label, diff))
 
                     if results:
-                        # ログ記録
                         log_error = write_log(client_name, selected_months, diff_results)
                         if log_error:
                             st.warning(f"⚠️ ログ記録エラー：{log_error}")

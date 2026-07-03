@@ -304,7 +304,8 @@ col1, col2 = st.columns([1, 1], gap="large")
 with col1:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("① 対象月を選択")
-    selected_months = st.multiselect("対象月（複数選択可）", list(month_options.keys()), default=["2026年3月"])
+    latest_month = list(month_options.keys())[-1]
+selected_months = st.multiselect("対象月（複数選択可）", list(month_options.keys()), default=[latest_month])
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-card">', unsafe_allow_html=True)

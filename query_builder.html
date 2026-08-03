@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>楽楽販売データ クエリビルダー</title>
+<style>
+:root{
+  --navy:#1d3f5e;--navy-d:#14293d;--teal:#2b8f8c;--teal-l:#e6f2f1;
+  --ink:#16202b;--sub:#5a6a78;--line:#dfe5ea;--bg:#f5f7f8;--card:#fff;
+  --hot:#c2410c;--warm:#d97706;--cool:#64748b;--err:#b3261e;
+}
+*{box-sizing:border-box}html,body{margin:0;padding:0}
+body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,system-ui,sans-serif;
+ background:var(--bg);color:var(--ink);font-size:13px;line-height:1.55}
+header{background:var(--navy);color:#fff;padding:15px 22px}
+.w{max-width:1680px;margin:0 auto}
+h1{margin:0;font-size:18px;font-weight:700}
+h1 small{font-weight:400;font-size:12px;color:#a8c2d6;margin-left:10px}
+main{max-width:1680px;margin:0 auto;padding:15px 22px 70px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:15px;margin-bottom:12px}
+.card>h2{margin:0 0 11px;font-size:12px;font-weight:700;color:var(--navy);letter-spacing:.05em;
+ display:flex;align-items:center;gap:8px}
+.card>h2 .n{background:var(--navy);color:#fff;width:19px;height:19px;border-radius:50%;
+ display:grid;place-items:center;font-size:11px;flex:none}
+.card>h2 .hint{font-weight:400;color:var(--sub);letter-spacing:0;font-size:11px}
+#drop{border:2px dashed var(--line);border-radius:8px;padding:22px;text-align:center;color:var(--sub);
+ cursor:pointer;background:#fafcfc;transition:.15s}
+#drop:hover,#drop.on{border-color:var(--teal);background:var(--teal-l);color:var(--navy)}
+#drop b{display:block;font-size:14px;color:var(--ink);margin-bottom:3px}
+.files{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:8px;margin-top:11px}
+.f{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:#fafcfc}
+.f .t{font-size:11px;color:var(--sub);font-weight:700}
+.f .v{font-weight:600}.f .m{font-size:10px;color:var(--sub);word-break:break-all}
+.f.ok{border-color:var(--teal);background:var(--teal-l)}.f.ok .t{color:var(--teal)}
+.grid{display:flex;flex-wrap:wrap;gap:13px;align-items:flex-end}
+.o{display:flex;flex-direction:column;gap:3px}
+.o label{font-size:11px;color:var(--sub);font-weight:700}
+input,select,textarea{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal)}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:12px;width:100%;min-height:76px;resize:vertical}
+.chk{display:flex;align-items:center;gap:6px;font-size:12px;padding-bottom:7px;white-space:nowrap}
+button{font:inherit;padding:7px 15px;border:1px solid var(--navy);background:var(--navy);color:#fff;border-radius:5px;cursor:pointer}
+button:hover{background:var(--navy-d)}button:disabled{opacity:.4;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--navy)}button.ghost:hover{background:var(--teal-l)}
+button.sm{padding:4px 10px;font-size:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:#fff;color:var(--navy);padding:6px 14px}
+.seg button.on{background:var(--navy);color:#fff}
+.mets{display:flex;flex-wrap:wrap;gap:7px}
+.met{border:1px solid var(--line);border-radius:20px;padding:4px 13px;cursor:pointer;background:#fff;font-size:12px;user-select:none}
+.met.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.met.dis{opacity:.35;cursor:not-allowed}
+details{border:1px solid var(--line);border-radius:6px;padding:8px 11px;background:#fafcfc}
+details summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--navy)}
+details>div{margin-top:9px}
+.kpis{display:flex;flex-wrap:wrap;gap:24px;list-style:none;margin:0 0 12px;padding:12px 16px;background:var(--navy);color:#fff;border-radius:8px}
+.kpis li{display:flex;flex-direction:column}
+.kpis b{font-size:20px;font-variant-numeric:tabular-nums;line-height:1.15}
+.kpis span{font-size:11px;color:#a8c2d6;margin-top:2px}
+.tbox{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:72vh}
+table{width:100%;border-collapse:collapse}
+thead th{background:#eef2f5;color:var(--navy);font-size:11px;font-weight:700;text-align:left;padding:7px 9px;
+ border-bottom:2px solid var(--line);position:sticky;top:0;z-index:5;white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{background:var(--teal-l)}
+thead th.g{text-align:center;border-left:1px solid var(--line)}
+thead th .ar{color:var(--teal);font-size:10px}
+tbody td{padding:6px 9px;border-bottom:1px solid #eef1f4;vertical-align:top}
+tbody tr:hover{background:#f8fbfb}
+tbody tr.tot{background:#eef2f5;font-weight:700;position:sticky;bottom:0}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.mono{font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:nowrap;color:var(--sub)}
+td.nw{white-space:nowrap}
+.gb{height:4px;background:#edf1f4;border-radius:3px;overflow:hidden;min-width:56px;margin-top:2px}
+.gf{height:100%;border-radius:3px;background:var(--teal)}
+.gf.lo{background:var(--hot)}.gf.mid{background:var(--warm)}
+.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;background:#eef2f5;color:var(--navy);white-space:nowrap}
+.pill.warn{background:#fdecec;color:var(--err)}
+.pill.gray{background:#f0f2f4;color:var(--sub)}
+.b1{color:var(--hot);font-weight:700}.b2{color:var(--warm);font-weight:600}.b3{color:var(--teal)}.b4{color:var(--cool)}
+.more{padding:13px;text-align:center;color:var(--sub);font-size:12px}
+.empty{padding:42px;text-align:center;color:var(--sub)}
+.msg{padding:9px 12px;border-radius:6px;font-size:12px;margin-top:9px}
+.msg.err{background:#fdecec;color:var(--err);border:1px solid #f5c6c6}
+.msg.info{background:var(--teal-l);color:var(--navy);border:1px solid #bfe0de}
+.hide{display:none}
+.note{font-size:11px;color:var(--sub);margin:8px 0 0;line-height:1.7}
+.presets{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="w" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+<h1 style="flex:1;min-width:230px">楽楽販売データ クエリビルダー
+<small>軸と指標を選んで、見たい形に集計します</small></h1>
+<a href="query_builder_manual.html" target="_blank" rel="noopener"
+ style="flex:none;display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--navy);
+ border:1px solid #fff;border-radius:5px;padding:7px 15px;font-size:13px;font-weight:700;text-decoration:none"
+ onmouseover="this.style.background='var(--teal-l)'" onmouseout="this.style.background='#fff'">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+ stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+マニュアル</a>
+</div></header>
+<main>
+
+<div class="card">
+ <h2><span class="n">1</span>データを読み込む</h2>
+ <div id="drop"><b>CSVをここにドロップ、またはクリックして選択</b>
+ 顧客マスタ・法人マスタ・全受注データ。分割された _0 _1 _2 _3 もまとめて選べます</div>
+ <input type="file" id="fi" multiple accept=".csv" hidden>
+ <div class="files">
+  <div class="f" id="f-cust"><div class="t">顧客マスタ</div><div class="v">未読込</div><div class="m">顧客№・窓口名</div></div>
+  <div class="f" id="f-hojin"><div class="t">法人マスタ</div><div class="v">未読込</div><div class="m">法人顧客№・法人名</div></div>
+  <div class="f" id="f-order"><div class="t">全受注データ</div><div class="v">未読込</div><div class="m">納品日・受注額</div></div>
+ </div>
+ <div id="load" class="msg info hide"></div>
+</div>
+
+<div class="card">
+ <h2><span class="n">2</span>集計の条件</h2>
+ <div class="presets" id="presets"></div>
+ <div class="grid">
+  <div class="o"><label>分析単位</label>
+   <span class="seg" id="unitSeg">
+    <button type="button" data-u="h" class="on">法人（Hコード）</button>
+    <button type="button" data-u="k">顧客（Kコード）</button>
+   </span>
+   <input type="hidden" id="unit" value="h"></div>
+  <div class="o"><label>基準日</label><input type="date" id="base"></div>
+  <div class="o"><label>母数（現S）の条件</label><select id="smonths">
+   <option value="0">条件なし（全件）</option><option value="6">直近6ヶ月に掲載</option>
+   <option value="12" selected>直近1年に掲載</option><option value="24">直近2年に掲載</option>
+   <option value="36">直近3年に掲載</option></select></div>
+  <div class="o"><label>集計期間</label><select id="apreset">
+   <option value="7">直近1週間</option><option value="30">直近1ヶ月</option>
+   <option value="90" selected>直近3ヶ月</option><option value="180">直近6ヶ月</option>
+   <option value="365">直近1年</option><option value="0">カスタム</option></select></div>
+  <div class="o"><label>開始日</label><input type="date" id="afrom"></div>
+  <div class="o"><label>終了日</label><input type="date" id="ato"></div>
+  <label class="chk"><input type="checkbox" id="onlyS" checked>母数を満たす先だけを対象にする</label>
+  <label class="chk"><input type="checkbox" id="noClosed">閉店・移転を除く</label>
+ </div>
+ <details style="margin-top:11px"><summary>営業グループの定義（奈良さんと吉川さんの合算など）</summary>
+  <div>
+   <p class="note" style="margin:0 0 6px">1行に1グループ。<code>グループ名 = 担当A, 担当B</code> の形で書きます。ここに書かれていない担当は、その人ひとりのグループになります。</p>
+   <textarea id="groups">奈良・吉川 = 奈良達生, 吉川恭平</textarea>
+  </div>
+ </details>
+ <details style="margin-top:9px" open><summary>除外キーワード<span class="hint" style="font-weight:400;color:var(--sub);margin-left:8px">ここに書いた先は最初から読み込まれません。集計にも絞り込みの選択肢にも出てきません</span></summary>
+  <div>
+   <p class="note" style="margin:0 0 6px">1行に1つ。既定では<b>営業担当名</b>との部分一致で除外します。他の項目で除外したいときは <code>社名:</code> <code>コード:</code> <code>住所:</code> <code>業種:</code> を頭に付けてください。<code>#</code> で始まる行はメモとして無視されます。</p>
+   <textarea id="excl" style="min-height:150px"># 集計対象外の担当
+FAW
+佐藤孝
+テレマ
+フロムエーワーク
+
+# 担当が実在しないもの
+退職者
+現在担当要確認
+後任なし
+担当なし
+現在対応者なし
+不明
+その他
+
+# 閉業・廃業
+閉業
+現存せず
+廃業
+
+# 自社・ダミー法人
+コード:H0000393
+コード:H0007538</textarea>
+   <div id="exclInfo" class="msg info" style="margin-top:8px">読み込み後にここへ除外件数が出ます。</div>
+  </div>
+ </details>
+</div>
+
+<div class="card">
+ <h2><span class="n">3</span>出力の形<span class="hint">行と列に何を置くか、どの数字を見るか</span></h2>
+ <div class="grid">
+  <div class="o"><label>出力タイプ</label>
+   <span class="seg"><button id="mPivot" class="on">集計表</button><button id="mList">明細一覧</button></span></div>
+  <div class="o" id="wRow"><label>行（縦軸）</label><select id="dimR"></select></div>
+  <div class="o" id="wCol"><label>列（横軸）</label><select id="dimC"><option value="">なし</option></select></div>
+ </div>
+ <div class="o" id="wMet" style="margin-top:12px"><label>指標（クリックで選択・複数可）</label>
+  <div class="mets" id="mets"></div></div>
+ <p class="note" id="metNote"></p>
+</div>
+
+<div class="card">
+ <h2><span class="n">4</span>絞り込み</h2>
+ <div class="grid" id="filters"></div>
+ <div style="margin-top:13px;display:flex;gap:9px;align-items:center">
+  <button id="run">この条件で集計する</button>
+  <button class="ghost sm" id="reset">絞り込みをクリア</button>
+ </div>
+</div>
+
+<div id="out" class="hide">
+ <ul class="kpis" id="kpis"></ul>
+ <div class="card" style="padding:10px 13px">
+  <div class="grid">
+   <input type="search" id="q" placeholder="表の中を絞り込み" style="min-width:250px">
+   <span style="margin-left:auto;color:var(--sub)"><b id="cn" style="color:var(--ink);font-size:15px">0</b> 行</span>
+   <button class="ghost sm" id="dl">CSVダウンロード</button>
+  </div>
+ </div>
+ <div class="tbox"><table><thead id="th"></thead><tbody id="tb"></tbody></table><div class="more" id="mo"></div></div>
+ <p class="note" id="foot"></p>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nf=n=>(n==null||isNaN(n))?'—':Number(n).toLocaleString();
+const yen=n=>(n==null||isNaN(n))?'—':'¥'+Math.round(n).toLocaleString();
+
+/* ========== CSV ========== */
+function parseCSV(t){const rows=[];let row=[],cur='',q=false;
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+  else{if(c==='"')q=true;else if(c===','){row.push(cur);cur=''}
+   else if(c==='\r'){}else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur=''}else cur+=c}}
+ if(cur!==''||row.length){row.push(cur);rows.push(row)}return rows}
+function decode(b){let t=null;
+ try{t=new TextDecoder('shift_jis',{fatal:false}).decode(b)}catch(e){}
+ if(!t||!/[顧法納受]/.test(t.slice(0,700))){const u=new TextDecoder('utf-8').decode(b);
+  if(/[顧法納受]/.test(u.slice(0,700)))t=u}
+ if(!t)t=new TextDecoder('utf-8').decode(b);
+ return t.charCodeAt(0)===0xFEFF?t.slice(1):t}
+function d2(s){s=(s||'').trim();if(!s)return null;
+ const m=s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+ return m?m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2):null}
+const days=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+const addM=(iso,n)=>{const d=new Date(iso);d.setMonth(d.getMonth()+n);return d.toISOString().slice(0,10)};
+const addD=(iso,n)=>{const d=new Date(iso);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+
+/* ========== 取込 ========== */
+const DB={cust:new Map(),hojin:new Map(),orders:0,last:new Map(),dates:new Map(),amt:new Map(),
+ files:{cust:[],hojin:[],order:[]},maxDate:null};
+function kind(hd){const h=new Set(hd);
+ if(h.has('納品日')&&h.has('受注額'))return 'order';
+ if(h.has('顧客№')&&(h.has('*窓口名')||h.has('*法人顧客№')))return 'cust';
+ if(h.has('法人顧客№')&&h.has('*法人名'))return 'hojin';return null}
+async function ingest(list){
+ $('load').classList.remove('hide');
+ for(const file of list){
+  $('load').className='msg info';$('load').textContent='読込中… '+file.name;
+  await new Promise(r=>setTimeout(r,5));
+  const rows=parseCSV(decode(await file.arrayBuffer()));
+  if(!rows.length)continue;
+  const hd=rows[0].map(s=>s.trim()),kd=kind(hd);
+  if(!kd){$('load').className='msg err';
+   $('load').textContent=file.name+' は種類を判別できませんでした。楽楽販売から出力した顧客マスタ・法人マスタ・全受注データを選んでください。';continue}
+  const ix={};hd.forEach((h,i)=>ix[h]=i);
+  const g=(r,k)=>{const i=ix[k];return i==null?'':(r[i]||'').trim()};
+  for(let i=1;i<rows.length;i++){const r=rows[i];if(r.length<3)continue;
+   if(kd==='cust'){const k=g(r,'顧客№');if(!k)continue;
+    DB.cust.set(k,{k,h:g(r,'*法人顧客№'),co:g(r,'法人名'),br:g(r,'*窓口名'),ad:g(r,'*住所'),
+     tel:g(r,'*電話番号')||g(r,'代表電話番号'),hn:g(r,'法人番号'),rep:g(r,'現在担当営業'),
+     md:d2(g(r,'最新実績(納品日)')),mp:g(r,'最新掲載実績(媒体)'),ind:g(r,'業種大分類'),cl:g(r,'閉店・移転情報')});
+   }else if(kd==='hojin'){const h=g(r,'法人顧客№');if(!h)continue;
+    DB.hojin.set(h,{h,co:g(r,'*法人名'),ad:g(r,'*本社住所'),tel:g(r,'*代表電話番号'),hn:g(r,'法人番号'),
+     rep:g(r,'現在営業担当'),ind:g(r,'業種大分類'),cl:g(r,'閉店・移転情報')});
+   }else{const k=g(r,'顧客№'),d=d2(g(r,'納品日'));if(!k||!d)continue;DB.orders++;
+    const p=g(r,'商品'),cu=DB.last.get(k);if(!cu||d>cu[0])DB.last.set(k,[d,p]);
+    let dl=DB.dates.get(k);if(!dl){dl=[];DB.dates.set(k,dl)}dl.push(d);
+    const a=parseFloat((g(r,'受注額')||'0').replace(/,/g,''))||0;
+    let m=DB.amt.get(k);if(!m){m={};DB.amt.set(k,m)}const ym=d.slice(0,7);m[ym]=(m[ym]||0)+a;
+    if(!DB.maxDate||d>DB.maxDate)DB.maxDate=d}}
+  DB.files[kd].push(file.name);
+  const el=$('f-'+kd);el.classList.add('ok');
+  el.querySelector('.v').textContent=(kd==='cust'?DB.cust.size:kd==='hojin'?DB.hojin.size:DB.orders).toLocaleString()+'件';
+  el.querySelector('.m').textContent=DB.files[kd].join(' / ');
+ }
+ $('load').className='msg info';
+ $('load').textContent='読込完了。顧客 '+DB.cust.size.toLocaleString()+'件／法人 '+DB.hojin.size.toLocaleString()
+  +'件／受注 '+DB.orders.toLocaleString()+'行'+(DB.maxDate?'（最終納品日 '+DB.maxDate+'）':'');
+ if(DB.maxDate){$('base').value=DB.maxDate;syncPeriod()}
+ buildFilters();
+}
+$('drop').onclick=()=>$('fi').click();
+$('fi').onchange=e=>ingest([...e.target.files]);
+['dragover','dragenter'].forEach(t=>$('drop').addEventListener(t,e=>{e.preventDefault();$('drop').classList.add('on')}));
+['dragleave','drop'].forEach(t=>$('drop').addEventListener(t,e=>{e.preventDefault();$('drop').classList.remove('on')}));
+$('drop').addEventListener('drop',e=>ingest([...e.dataTransfer.files]));
+
+/* ========== 共通 ========== */
+function mediaGroup(p){if(!p)return '不明';
+ if(p.indexOf('Indeed')===0)return p.indexOf('PLUS')>=0?'Indeed PLUS':'Indeed';
+ if(p.indexOf('求人ボックス')===0)return '求人ボックス';
+ const t=p.slice(0,2);
+ if(t==='ＴＷ')return 'タウンワーク';
+ if(['Ｔｉ','ＴＯ','ＴＲ','Ｔ看','Ｔ２','Ｔ４','Ｔ１','ＡＢ'].includes(t))return 'タウンワーク系(枠)';
+ if(t==='春Ｆ'||['Ｆ関','Ｆ東','Ｆ九','Ｆ北','Ｆ甲','Ｆ中','Ｆ西','Ｆ海','Ｆ２'].includes(t))return 'フロム・エー';
+ if(['ナビ','Ｎ回'].includes(t))return 'リクナビNEXT';
+ if(['ＷＶ','ＷＥ'].includes(t)||p.indexOf('WEB')===0)return 'Web広告';
+ if(t==='枠Ａ')return '枠広告';
+ if(['ＨＬ','Ｈ東','Ｈ関','Ｈ北','Ｈ群'].includes(t))return 'ＨＬ枠';
+ if(p[0]==='モ')return 'モバイル枠';
+ if(p.indexOf('カスタマイズ企画')>=0||p.indexOf('企画商品')>=0)return '企画商品';
+ return 'その他媒体'}
+const PREF=/^(北海道|東京都|京都府|大阪府|.{2,3}?県)/;
+function addr(a){a=(a||'').trim().replace(/\u3000/g,' ');if(!a)return['','',''];
+ const m=PREF.exec(a);if(!m)return['','',a];
+ const p=m[1],rest=a.slice(p.length),m2=/^(.+?市.+?区)/.exec(rest);
+ const city=m2?m2[1]:((/^(.+?[市区郡])/.exec(rest)||['',''])[1]||'');
+ return[p,city,rest.slice(city.length)]}
+const EXSCOPE={'社名':'name','コード':'id','住所':'ad','業種':'ind','担当':'rep'};
+function exclRules(){
+ const out=[];
+ (($('excl')||{}).value||'').split('\n').forEach(ln=>{
+  ln=ln.trim(); if(!ln||ln[0]==='#')return;
+  const i=ln.indexOf(':')>=0?ln.indexOf(':'):ln.indexOf('：');
+  if(i>0){const sc=EXSCOPE[ln.slice(0,i).trim()];
+   if(sc){const kw=ln.slice(i+1).trim();if(kw){out.push([sc,kw.toLowerCase()]);return}}}
+  out.push(['rep',ln.toLowerCase()]);
+ });
+ return out}
+function isExcluded(e,rules){
+ for(let i=0;i<rules.length;i++){
+  const[sc,kw]=rules[i];
+  const t=(sc==='rep'?e.rep:sc==='name'?e.name:sc==='id'?(e.id+' '+e.h+' '+e.hn):
+           sc==='ad'?(e.pref+e.city+e.rest):e.ind)||'';
+  if(t.toLowerCase().indexOf(kw)>=0)return true}
+ return false}
+let EXCL={n:0,total:0,reps:[]};
+function repGroups(){const map=new Map();
+ ($('groups').value||'').split('\n').forEach(ln=>{
+  const i=ln.indexOf('=');if(i<0)return;
+  const name=ln.slice(0,i).trim();if(!name)return;
+  ln.slice(i+1).split(/[,、]/).forEach(r=>{r=r.trim();if(r)map.set(r,name)})});
+ return map}
+
+/* ========== エンティティ構築 ========== */
+let ENT=[],CFG={};
+function buildEntities(){
+ const unit=$('unit').value,gm=repGroups(),noClosed=$('noClosed').checked;
+ const list=[];
+ if(unit==='k'){
+  DB.cust.forEach(c=>{
+   const hm=DB.hojin.get(c.h)||{};
+   if(noClosed&&(c.cl||hm.cl))return;
+   const l=DB.last.get(c.k),ld=l?(c.md&&c.md>l[0]?[c.md,c.mp]:l):(c.md?[c.md,c.mp]:null);
+   const a=addr(c.ad||hm.ad);
+   list.push({id:c.k,h:c.h,name:c.co||hm.co||'(社名不明)',sub:c.br,
+    rep:c.rep||hm.rep||'',pref:a[0],city:a[1],rest:a[2],ind:c.ind||hm.ind||'',
+    tel:c.tel||hm.tel||'',hn:c.hn||hm.hn||'',ks:1,
+    last:ld?ld[0]:null,media:ld?mediaGroup(ld[1]):'実績なし',
+    dates:DB.dates.get(c.k)||[],amt:DB.amt.get(c.k)||{}})});
+ }else{
+  const byH=new Map();
+  DB.cust.forEach(c=>{if(!c.h)return;let a=byH.get(c.h);if(!a){a=[];byH.set(c.h,a)}a.push(c)});
+  byH.forEach((ks,h)=>{
+   const hm=DB.hojin.get(h)||{};
+   if(noClosed&&hm.cl)return;
+   let last=null,prod='',rep=hm.rep||'',dates=[],amt={};
+   ks.forEach(c=>{
+    const l=DB.last.get(c.k),ld=l?(c.md&&c.md>l[0]?[c.md,c.mp]:l):(c.md?[c.md,c.mp]:null);
+    if(ld&&(!last||ld[0]>last)){last=ld[0];prod=ld[1]}
+    if(!rep&&c.rep)rep=c.rep;
+    const dl=DB.dates.get(c.k);if(dl)dates=dates.concat(dl);
+    const am=DB.amt.get(c.k);if(am)for(const y in am)amt[y]=(amt[y]||0)+am[y]});
+   const a=addr(hm.ad||(ks[0]||{}).ad);
+   list.push({id:h,h:h,name:hm.co||ks[0].co||'(法人名不明)',sub:'('+ks.length+'窓口)',
+    rep,pref:a[0],city:a[1],rest:a[2],ind:hm.ind||ks[0].ind||'',
+    tel:hm.tel||ks[0].tel||'',hn:hm.hn||ks[0].hn||'',ks:ks.length,
+    last,media:last?mediaGroup(prod):'実績なし',dates,amt})});
+ }
+ list.forEach(e=>{if(!e.rep)e.rep='(担当なし)';e.group=gm.get(e.rep)||e.rep});
+ const rules=exclRules();
+ if(!rules.length){EXCL={n:0,total:list.length,reps:[]};return list}
+ const dropped=new Set(),kept=[];
+ list.forEach(e=>{if(isExcluded(e,rules)){dropped.add(e.rep)}else kept.push(e)});
+ EXCL={n:list.length-kept.length,total:list.length,reps:[...dropped].sort((a,b)=>a.localeCompare(b,'ja'))};
+ return kept}
+const hasIn=(e,f,t)=>{const d=e.dates;for(let i=0;i<d.length;i++)if(d[i]>=f&&d[i]<=t)return true;
+ return !!(e.last&&e.last>=f&&e.last<=t)};
+const amtIn=(e,f,t)=>{let s=0;const fm=f.slice(0,7),tm=t.slice(0,7);
+ for(const ym in e.amt)if(ym>=fm&&ym<=tm)s+=e.amt[ym];return s};
+
+/* ========== 軸と指標 ========== */
+const DIMS={
+ group:{n:'営業グループ',v:e=>e.group},
+ rep:{n:'営業担当',v:e=>e.rep},
+ pref:{n:'都道府県',v:e=>e.pref||'(住所なし)'},
+ city:{n:'市区郡',v:e=>e.pref+e.city||'(住所なし)'},
+ ind:{n:'業種大分類',v:e=>e.ind||'(未設定)'},
+ media:{n:'最終掲載媒体',v:e=>e.media},
+ band:{n:'空白期間の帯',v:(e,c)=>{if(!e.last)return '未取引';
+   const d=days(e.last,c.base);return d<365?'1年未満':d<730?'1〜2年':d<1095?'2〜3年':d<1460?'3〜4年':'4年以上'}},
+ state:{n:'状態（母数／空白／未取引）',v:(e,c)=>!e.last?'未取引':(c.scut&&e.last<=c.scut?'空白':'母数')},
+ act:{n:'集計期間のアクティブ',v:(e,c)=>hasIn(e,c.af,c.at)?'アクティブ':'非アクティブ'},
+ ym:{n:'年月（掲載のあった月）',time:'m'},
+ y:{n:'年（掲載のあった年）',time:'y'},
+ all:{n:'全社（合計1行）',v:()=>'全社'},
+};
+const METS={
+ cnt:{n:'件数',f:(es)=>es.length,t:'num'},
+ gen:{n:'母数（現S）',f:(es,c)=>es.filter(e=>!c.scut||(e.last&&e.last>c.scut)).length,t:'num'},
+ act:{n:'アクティブ数',f:(es,c,f,t)=>es.filter(e=>hasIn(e,f||c.af,t||c.at)).length,t:'num'},
+ rate:{n:'稼働率',f:(es,c,f,t)=>{const g=METS.gen.f(es,c);return g?Math.round(METS.act.f(es,c,f,t)/g*1000)/10:null},t:'rate'},
+ gap:{n:'非アクティブ数',f:(es,c,f,t)=>METS.gen.f(es,c)-METS.act.f(es,c,f,t),t:'num'},
+ amt:{n:'取扱高',f:(es,c,f,t)=>es.reduce((s,e)=>s+amtIn(e,f||c.af,t||c.at),0),t:'yen'},
+ avg:{n:'1件あたり取扱高',f:(es,c,f,t)=>{const a=METS.act.f(es,c,f,t);return a?METS.amt.f(es,c,f,t)/a:null},t:'yen'},
+ ks:{n:'窓口数',f:(es)=>es.reduce((s,e)=>s+e.ks,0),t:'num'},
+};
+let selMets=['gen','act','rate'],mode='pivot';
+function initSelectors(){
+ const dr=$('dimR'),dc=$('dimC');
+ dr.innerHTML='';dc.innerHTML='<option value="">なし</option>';
+ for(const k in DIMS){
+  if(!DIMS[k].time)dr.insertAdjacentHTML('beforeend',`<option value="${k}">${DIMS[k].n}</option>`);
+  dc.insertAdjacentHTML('beforeend',`<option value="${k}">${DIMS[k].n}</option>`)}
+ dr.value='group';
+ drawMets()}
+function drawMets(){
+ const single=!!$('dimC').value;
+ $('mets').innerHTML=Object.keys(METS).map(k=>
+  `<span class="met${selMets.includes(k)?' on':''}" data-k="${k}">${METS[k].n}</span>`).join('');
+ [...$('mets').children].forEach(el=>el.onclick=()=>{
+  const k=el.dataset.k;
+  if(single){selMets=[k]}
+  else if(selMets.includes(k)){if(selMets.length>1)selMets=selMets.filter(x=>x!==k)}
+  else selMets.push(k);
+  drawMets()});
+ $('metNote').textContent = mode==='list'
+  ? '明細一覧では、対象1件ずつの行を出します。指標の選択は使いません。'
+  : single ? '列に軸を置いているので、指標は1つだけ選べます。列を「なし」にすると複数の指標を横に並べられます。'
+  : '複数選べます。列に軸を置くと1つに絞られます。';
+}
+$('dimC').onchange=()=>{if($('dimC').value&&selMets.length>1)selMets=[selMets[0]];drawMets()};
+$('mPivot').onclick=()=>{mode='pivot';$('mPivot').classList.add('on');$('mList').classList.remove('on');
+ $('wRow').style.display='';$('wCol').style.display='';$('wMet').style.display='';drawMets()};
+$('mList').onclick=()=>{mode='list';$('mList').classList.add('on');$('mPivot').classList.remove('on');
+ $('wRow').style.display='none';$('wCol').style.display='none';$('wMet').style.display='none';drawMets()};
+
+/* ========== 期間 ========== */
+function syncPeriod(){const d=+$('apreset').value;if(!d)return;
+ const b=$('base').value||DB.maxDate;if(!b)return;
+ $('ato').value=b;$('afrom').value=addD(b,-d+1)}
+$('apreset').onchange=syncPeriod;$('base').onchange=syncPeriod;
+
+/* ========== 絞り込み ========== */
+const FKEYS=['group','rep','pref','ind','media','band','state'];
+function showExcl(){
+ const el=$('exclInfo'); if(!el)return;
+ el.className='msg info';
+ el.textContent = EXCL.n
+  ? EXCL.n.toLocaleString()+' 件を除外しました（読込 '+EXCL.total.toLocaleString()+' 件 → 対象 '
+    +(EXCL.total-EXCL.n).toLocaleString()+' 件）。除外された担当：'+(EXCL.reps.join('、')||'—')
+  : '除外なし。対象 '+EXCL.total.toLocaleString()+' 件。';
+}
+function buildFilters(){
+ const ents=buildEntities(),c=cfg();
+ showExcl();
+ $('filters').innerHTML=FKEYS.map(k=>{
+  const s=new Set();ents.forEach(e=>{const v=DIMS[k].v(e,c);if(v)s.add(v)});
+  return `<div class="o"><label>${DIMS[k].n}</label><select data-f="${k}">
+   <option value="">すべて</option>${[...s].sort((a,b)=>String(a).localeCompare(String(b),'ja'))
+   .map(v=>`<option>${esc(v)}</option>`).join('')}</select></div>`}).join('')
+  +`<div class="o"><label>キーワード</label><input type="search" data-f="kw" placeholder="社名・住所・電話・コード"></div>`;
+}
+$('reset').onclick=()=>{[...$('filters').querySelectorAll('select,input')].forEach(e=>e.value='')};
+function setUnit(u){
+ $('unit').value=u;
+ [...$('unitSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.u===u));
+ if(DB.cust.size)buildFilters();
+}
+[...$('unitSeg').children].forEach(b=>b.onclick=()=>setUnit(b.dataset.u));
+$('noClosed').onchange=()=>buildFilters();
+let exTimer=null;
+$('excl').addEventListener('input',()=>{clearTimeout(exTimer);
+ exTimer=setTimeout(()=>{if(DB.cust.size)buildFilters()},500)});
+$('groups').addEventListener('input',()=>{clearTimeout(exTimer);
+ exTimer=setTimeout(()=>{if(DB.cust.size)buildFilters()},500)});
+
+function cfg(){const b=$('base').value||DB.maxDate||new Date().toISOString().slice(0,10);
+ const sm=+$('smonths').value;
+ return{base:b,scut:sm?addM(b,-sm):null,sm,
+  af:$('afrom').value||addD(b,-89),at:$('ato').value||b,unit:$('unit').value}}
+
+/* ========== 実行 ========== */
+let RES={cols:[],rows:[],tot:null},view=[],sk=0,sd=1,shown=0;const CH=300;
+$('run').onclick=()=>{
+ if(!DB.cust.size){$('load').classList.remove('hide');$('load').className='msg err';
+  $('load').textContent='先に顧客マスタを読み込んでください。';return}
+ const c=cfg();CFG=c;
+ let ents=buildEntities();
+ // 絞り込み
+ const fv={};[...$('filters').querySelectorAll('[data-f]')].forEach(e=>fv[e.dataset.f]=e.value.trim());
+ ents=ents.filter(e=>{
+  for(const k of FKEYS)if(fv[k]&&DIMS[k].v(e,c)!==fv[k])return false;
+  if(fv.kw){const q=fv.kw.toLowerCase();
+   if((e.name+' '+e.sub+' '+e.pref+e.city+e.rest+' '+e.tel+' '+e.id+' '+e.hn).toLowerCase().indexOf(q)<0)return false}
+  if($('onlyS').checked&&c.scut&&!(e.last&&e.last>c.scut))return false;
+  return true});
+ RES = mode==='list'?buildList(ents,c):buildPivot(ents,c);
+ sk=RES.sortDefault||0;sd=RES.desc?-1:1;
+ $('out').classList.remove('hide');
+ $('kpis').innerHTML=RES.kpis.map(k=>`<li><b>${esc(k[1])}</b><span>${esc(k[0])}</span></li>`).join('');
+ $('foot').textContent=RES.foot||'';
+ applyQ();$('out').scrollIntoView({behavior:'smooth',block:'start'})};
+
+function monthsBetween(f,t){const out=[];let d=f.slice(0,7);
+ while(d<=t.slice(0,7)){out.push(d);const [y,m]=d.split('-').map(Number);
+  d=m===12?(y+1)+'-01':y+'-'+('0'+(m+1)).slice(-2)}return out}
+
+function buildPivot(ents,c){
+ const dr=$('dimR').value,dc=$('dimC').value;
+ const R=DIMS[dr];
+ const groups=new Map();
+ ents.forEach(e=>{const v=R.v(e,c)||'(未設定)';let a=groups.get(v);if(!a){a=[];groups.set(v,a)}a.push(e)});
+ const cols=[{n:R.n,t:'txt'}],rows=[];
+ if(!dc){
+  selMets.forEach(m=>cols.push({n:METS[m].n,t:METS[m].t}));
+  groups.forEach((es,v)=>rows.push([v,...selMets.map(m=>METS[m].f(es,c))]));
+  const tot=['合計',...selMets.map(m=>METS[m].f(ents,c))];
+  return{cols,rows,tot,kpis:kpi(ents,c),desc:true,sortDefault:1,
+   foot:'行＝'+R.n+'／指標＝'+selMets.map(m=>METS[m].n).join('・')+'　'+periodText(c)};
+ }
+ const C=DIMS[dc],met=METS[selMets[0]];
+ let keys=[];
+ if(C.time){
+  const ms=monthsBetween(c.af,c.at);
+  keys = C.time==='m'?ms:[...new Set(ms.map(m=>m.slice(0,4)))];
+ }else{const s=new Set();ents.forEach(e=>s.add(C.v(e,c)||'(未設定)'));
+  keys=[...s].sort((a,b)=>String(a).localeCompare(String(b),'ja'))}
+ keys.forEach(k=>cols.push({n:k,t:met.t,g:1}));
+ cols.push({n:'合計',t:met.t,g:1});
+ const range=k=>C.time==='m'?[k+'-01',k+'-31']:[k+'-01-01',k+'-12-31'];
+ groups.forEach((es,v)=>{
+  const line=[v];
+  keys.forEach(k=>{
+   if(C.time){const[f,t]=range(k);line.push(met.f(es,c,f>c.af?f:c.af,t<c.at?t:c.at))}
+   else line.push(met.f(es.filter(e=>(C.v(e,c)||'(未設定)')===k),c))});
+  line.push(met.f(es,c));rows.push(line)});
+ const tot=['合計'];
+ keys.forEach(k=>{if(C.time){const[f,t]=range(k);tot.push(met.f(ents,c,f>c.af?f:c.af,t<c.at?t:c.at))}
+  else tot.push(met.f(ents.filter(e=>(C.v(e,c)||'(未設定)')===k),c))});
+ tot.push(met.f(ents,c));
+ return{cols,rows,tot,kpis:kpi(ents,c),desc:true,sortDefault:cols.length-1,
+  foot:'行＝'+R.n+'／列＝'+C.n+'／指標＝'+met.n+'　'+periodText(c)};
+}
+function buildList(ents,c){
+ const cols=[{n:CFG.unit==='h'?'法人№':'顧客№',t:'mono'},{n:'社名',t:'txt'},
+  {n:CFG.unit==='h'?'窓口数':'窓口名',t:'txt'},{n:'営業グループ',t:'nw'},{n:'営業担当',t:'nw'},
+  {n:'都道府県',t:'nw'},{n:'市区郡',t:'nw'},{n:'以下住所',t:'txt'},{n:'法人番号',t:'mono'},{n:'電話番号',t:'mono'},
+  {n:'業種大分類',t:'nw'},{n:'最終掲載日',t:'nw'},{n:'空白日数',t:'gap'},{n:'最終掲載媒体',t:'nw'},
+  {n:'状態',t:'state'},{n:'集計期間の掲載',t:'act'},{n:'集計期間の取扱高',t:'yen'}];
+ const rows=ents.map(e=>[e.id,e.name,e.sub,e.group,e.rep,e.pref,e.city,e.rest,e.hn,e.tel,e.ind,
+  e.last||'',e.last?days(e.last,c.base):null,e.media,
+  !e.last?'未取引':(c.scut&&e.last<=c.scut?'空白':'母数'),
+  hasIn(e,c.af,c.at)?'アクティブ':'非アクティブ',amtIn(e,c.af,c.at)]);
+ return{cols,rows,tot:null,kpis:kpi(ents,c),desc:true,sortDefault:11,
+  foot:'明細一覧　'+periodText(c)};
+}
+function periodText(c){
+ return '単位＝'+(c.unit==='h'?'法人（Hコード）':'顧客（Kコード）')
+  +'／母数＝'+(c.sm?('直近'+c.sm+'ヶ月に掲載（'+c.scut+' 以降）'):'条件なし')
+  +'／集計期間＝'+c.af+' 〜 '+c.at+'／基準日＝'+c.base}
+function kpi(ents,c){
+ const g=METS.gen.f(ents,c),a=METS.act.f(ents,c);
+ return[[CFG.unit==='h'?'対象法人':'対象顧客',nf(ents.length)],['母数（現S）',nf(g)],['アクティブ',nf(a)],
+  ['稼働率',(g?Math.round(a/g*1000)/10:0)+'%'],['取扱高',yen(METS.amt.f(ents,c))],
+  ['除外',nf(EXCL.n)],['集計期間',c.af+' 〜 '+c.at]]}
+
+/* ========== 表示 ========== */
+function applyQ(){const q=$('q').value.trim().toLowerCase();
+ view=q?RES.rows.filter(r=>r.join(' ').toLowerCase().indexOf(q)>=0):RES.rows.slice();
+ doSort();render(true)}
+function doSort(){view.sort((a,b)=>{const x=a[sk],y=b[sk];
+ if(typeof x==='number'&&typeof y==='number')return(x-y)*sd;
+ if(x==null)return 1;if(y==null)return -1;
+ return String(x).localeCompare(String(y),'ja')*sd})}
+function cell(v,t){
+ if(t==='num')return`<td class="num">${nf(v)}</td>`;
+ if(t==='yen')return`<td class="num">${yen(v)}</td>`;
+ if(t==='rate')return v==null?'<td class="num">—</td>':
+  `<td class="num"><div>${v}%</div><div class="gb"><div class="gf${v<30?' lo':v<50?' mid':''}" style="width:${Math.min(100,v)}%"></div></div></td>`;
+ if(t==='mono')return`<td class="mono">${esc(v)}</td>`;
+ if(t==='nw')return`<td class="nw">${esc(v)}</td>`;
+ if(t==='gap')return v==null?'<td class="num">—</td>':
+  `<td class="num b${v<365?4:v<730?3:v<1460?2:1}">${Math.floor(v/365)}年${Math.round(v%365/30.4)?Math.round(v%365/30.4)+'ヶ月':''}</td>`;
+ if(t==='state')return`<td class="nw"><span class="pill ${v==='母数'?'':v==='空白'?'warn':'gray'}">${esc(v)}</span></td>`;
+ if(t==='act')return`<td class="nw"><span class="pill ${v==='アクティブ'?'':'warn'}">${esc(v)}</span></td>`;
+ return`<td>${esc(v)}</td>`}
+function render(reset){
+ if(reset){$('tb').innerHTML='';shown=0;
+  $('th').innerHTML='<tr>'+RES.cols.map((c,i)=>
+   `<th data-i="${i}" class="${c.g?'g':''}">${esc(c.n)}${i===sk?'<span class="ar"> '+(sd<0?'▼':'▲')+'</span>':''}</th>`).join('')+'</tr>';
+  [...$('th').querySelectorAll('th')].forEach(th=>th.onclick=()=>{
+   const i=+th.dataset.i;if(i===sk)sd=-sd;else{sk=i;sd=RES.cols[i].t==='txt'?1:-1}
+   doSort();render(true)})}
+ $('cn').textContent=view.length.toLocaleString();
+ if(!view.length){$('tb').innerHTML=`<tr><td colspan="${RES.cols.length}" class="empty">条件に合うデータがありません。期間や絞り込みを変えてください。</td></tr>`;
+  $('mo').textContent='';return}
+ const end=Math.min(shown+CH,view.length);let h='';
+ for(let i=shown;i<end;i++)h+='<tr>'+view[i].map((v,j)=>cell(v,RES.cols[j].t)).join('')+'</tr>';
+ $('tb').insertAdjacentHTML('beforeend',h);shown=end;
+ if(shown>=view.length&&RES.tot){
+  $('tb').insertAdjacentHTML('beforeend','<tr class="tot">'+RES.tot.map((v,j)=>cell(v,RES.cols[j].t)).join('')+'</tr>')}
+ $('mo').textContent=shown<view.length?shown.toLocaleString()+' / '+view.length.toLocaleString()+' 行　スクロールで続きを読み込みます':'全 '+view.length.toLocaleString()+' 行を表示中'}
+document.querySelector('.tbox').addEventListener('scroll',function(){
+ if(shown<view.length&&this.scrollTop+this.clientHeight>this.scrollHeight-400)render(false)});
+$('q').addEventListener('input',applyQ);
+$('dl').onclick=()=>{const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+ const body=view.concat(RES.tot?[RES.tot]:[]);
+ const csv='\uFEFF'+[RES.cols.map(c=>q(c.n)).join(',')].concat(body.map(r=>r.map(q).join(','))).join('\r\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+ a.download=(mode==='list'?'detail':'summary')+'_'+(CFG.unit==='h'?'hojin':'kokyaku')+'_'+String(CFG.af||'').replace(/-/g,'')+'_'+String(CFG.at||'').replace(/-/g,'')+'.csv';a.click()};
+
+/* ========== よく使う条件 ========== */
+const PRESETS=[
+ {n:'営業グループ別 現S稼働率',s:()=>{$('smonths').value='12';$('apreset').value='90';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='group';$('dimC').value='';
+  selMets=['gen','act','rate','amt']}},
+ {n:'営業担当別 現S稼働率',s:()=>{$('smonths').value='12';$('apreset').value='90';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='rep';$('dimC').value='';
+  selMets=['gen','act','rate','amt']}},
+ {n:'全社の月次アクティブ推移',s:()=>{$('smonths').value='12';$('apreset').value='365';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='all';$('dimC').value='ym';
+  selMets=['rate']}},
+ {n:'営業グループ × 月次アクティブ',s:()=>{$('smonths').value='12';$('apreset').value='180';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='group';$('dimC').value='ym';
+  selMets=['act']}},
+ {n:'担当 × 媒体 クロス集計',s:()=>{$('smonths').value='12';$('apreset').value='90';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='rep';$('dimC').value='media';
+  selMets=['gen']}},
+ {n:'掲載空白の一覧',s:()=>{$('smonths').value='12';$('apreset').value='365';
+  syncPeriod();$('onlyS').checked=false;$('mList').click()}},
+ {n:'都道府県別 稼働率',s:()=>{$('smonths').value='12';$('apreset').value='90';
+  syncPeriod();$('onlyS').checked=true;$('mPivot').click();$('dimR').value='pref';$('dimC').value='';
+  selMets=['gen','act','rate']}},
+];
+$('presets').innerHTML=PRESETS.map((p,i)=>`<button class="ghost sm" data-p="${i}">${esc(p.n)}</button>`).join('');
+[...$('presets').children].forEach(b=>b.onclick=()=>{PRESETS[+b.dataset.p].s();drawMets();$('run').click()});
+
+initSelectors();
+</script>
+</body></html>
